@@ -188,27 +188,40 @@ function paintGrid(context, cell, left = 0, top = 0, labels = false, grid = true
 }
 function paintIroned(context, cell, strength = state.ironStrength) {
   const width = state.cols * cell, height = state.rows * cell;
-  for (let y = 0; y < state.rows; y++) for (let x = 0; x < state.cols; x++) {
-    context.fillStyle = (x + y) % 2 ? '#f3f1eb' : '#fff';
-    context.fillRect(x * cell, y * cell, cell, cell);
-  }
-  const beads = document.createElement('canvas'); beads.width = width; beads.height = height;
-  const beadCtx = beads.getContext('2d');
-  for (let y = 0; y < state.rows; y++) for (let x = 0; x < state.cols; x++) {
-    const hex = state.cells[y * state.cols + x];
-    if (!hex) continue;
-    const cx = (x + .5) * cell, cy = (y + .5) * cell, radius = cell * .66;
-    beadCtx.fillStyle = hex; beadCtx.beginPath(); beadCtx.arc(cx, cy, radius, 0, Math.PI * 2); beadCtx.fill();
-  }
-  const blur = cell * (.012 + strength / 100 * .17);
-  context.save(); context.filter = `blur(${blur.toFixed(2)}px)`; context.drawImage(beads, 0, 0); context.restore();
-  context.drawImage(beads, 0, 0);
-  // A restrained highlight gives the fused surface some plastic sheen.
-  context.save(); context.globalAlpha = .11; context.fillStyle = '#fff';
+  // Ironing spreads each bead slightly into its neighbours; keep the pixel
+  // silhouette while removing the obvious white gaps of loose beads.
+  // Keep neighbouring blocks touching: a real ironed sheet reads as one
+  // continuous surface instead of a field of separated round beads.
+  const inset = -cell * (.018 + strength / 100 * .055), size = cell - inset * 2;
+  const radius = cell * (.045 + strength / 100 * .045);
+  const blur = cell * (.035 + strength / 100 * .14);
+  const fused = document.createElement('canvas'); fused.width = width; fused.height = height;
+  const fusedCtx = fused.getContext('2d');
+  const rounded = (target, x, y, w, h, r) => {
+    target.beginPath(); target.moveTo(x + r, y); target.arcTo(x + w, y, x + w, y + h, r); target.arcTo(x + w, y + h, x, y + h, r);
+    target.arcTo(x, y + h, x, y, r); target.arcTo(x, y, x + w, y, r); target.closePath();
+  };
+  const drawCells = (target, alpha = 1) => {
+    target.globalAlpha = alpha;
+    for (let y = 0; y < state.rows; y++) for (let x = 0; x < state.cols; x++) {
+      const hex = state.cells[y * state.cols + x]; if (!hex) continue;
+      rounded(target, x * cell + inset, y * cell + inset, size, size, radius);
+      target.fillStyle = hex; target.fill();
+    }
+    target.globalAlpha = 1;
+  };
+  // A clean surface makes the result read as the fused board, without the pattern grid.
+  context.fillStyle = '#fffdfa'; context.fillRect(0, 0, width, height);
+  // The blurred under-layer is the melted colour that crosses neighbouring cell edges.
+  drawCells(fusedCtx, .72);
+  context.save(); context.filter = `blur(${blur.toFixed(2)}px)`; context.globalAlpha = .82; context.drawImage(fused, 0, 0); context.restore();
+  // Keep a soft-edged, rounded-square colour block so the pixel silhouette remains readable.
+  drawCells(context, 1);
+  context.save(); context.globalAlpha = .14; context.fillStyle = '#fff';
   for (let y = 0; y < state.rows; y++) for (let x = 0; x < state.cols; x++) {
     if (!state.cells[y * state.cols + x]) continue;
-    const cx = (x + .5) * cell, cy = (y + .5) * cell;
-    context.beginPath(); context.ellipse(cx - cell * .15, cy - cell * .2, cell * .18, cell * .08, -.45, 0, Math.PI * 2); context.fill();
+    const px = x * cell + inset, py = y * cell + inset;
+    rounded(context, px + cell * .10, py + cell * .09, size * .52, size * .22, radius * .55); context.fill();
   }
   context.restore();
 }
