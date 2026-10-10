@@ -46,3 +46,9 @@ for (const ratio of [1/300, 60/72, 1, 300]) for (const fit of ['cover','contain'
   assert.ok(frame.sy+frame.sh<=region.y+region.height+1e-8);
   assert.ok(frame.dx>=0 && frame.dy>=0);
 }
+const imported = core.parseCsvGrid('\ufeff图纸尺寸,"4 × 3"\r\n\r\n逐格 HEX（空格不放豆）\r\n"#fa2345",,"#00ff00",\r\n,,,#abc\r\n,,,', palette, 'MARD');
+assert.deepEqual([imported.cols, imported.rows], [4, 3]);
+assert.deepEqual(imported.cells, ['#FA2345', null, '#00FF00', null, null, null, null, '#AABBCC', null, null, null, null]);
+const raw = core.parseCsvGrid('#fa2345,,#00ff00\n,,\n#ABCDEF,,', palette, 'MARD');
+assert.deepEqual([raw.cols, raw.rows], [3, 3]);
+assert.equal(raw.cells[0], '#FA2345');

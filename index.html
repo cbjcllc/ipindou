@@ -23,9 +23,11 @@
       <aside class="controls card">
         <div class="card-heading"><span class="step">01</span><div><h2>准备画布</h2><p>从一张图片开始</p></div></div>
         <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+        <input id="csvInput" type="file" accept=".csv,text/csv" hidden />
         <button id="uploadZone" class="upload-zone" type="button">
           <span class="upload-icon">↥</span><strong>选择一张图片</strong><span>或把图片拖到这里</span><small>PNG、JPG、WEBP · 图片不会上传</small>
         </button>
+        <button id="csvImport" class="secondary-button csv-import" type="button">导入 CSV 图纸 <small>支持 #RRGGBB，空白留空</small></button>
         <div id="fileInfo" class="file-info hidden"><span class="file-thumb" id="fileThumb"></span><span class="file-name" id="fileName">—</span><button id="removeImage" class="icon-button" aria-label="移除图片">×</button></div>
 
         <button id="cropImage" class="secondary-button crop-launch" disabled>裁剪照片 ↗</button>

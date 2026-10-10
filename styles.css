@@ -28,3 +28,4 @@ button:disabled{cursor:not-allowed;opacity:.45}button:focus-visible,input:focus-
 @media(max-width:1000px){.export-bar>.export-actions{grid-template-columns:1fr}.palette-header{gap:12px;flex-wrap:wrap}.palette-actions{gap:10px;flex-wrap:wrap}}
 @media(max-width:540px){.editor-dialog{padding:16px}.crop-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.color-edit-bar label{flex-basis:100%}.dialog-actions{flex-wrap:wrap}.export-bar>.export-actions{grid-template-columns:1fr}.export-actions .export-button{justify-content:flex-start;padding:14px;gap:12px}}
 .export-actions .export-copy{color:inherit}
+.csv-import{width:100%;margin-top:10px;text-align:center;color:var(--coral-dark)}.csv-import small{display:block;margin-top:3px;color:#9d9186;font-size:9px}

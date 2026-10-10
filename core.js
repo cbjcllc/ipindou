@@ -76,6 +76,52 @@
     }
     return out;
   }
+  function parseCsv(text) {
+    const rows = [], row = []; let cell = '', quoted = false;
+    text = String(text || '').replace(/^\uFEFF/, '');
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '"') { if (quoted && text[i + 1] === '"') { cell += '"'; i++; } else quoted = !quoted; }
+      else if (ch === ',' && !quoted) { row.push(cell); cell = ''; }
+      else if ((ch === '\n' || ch === '\r') && !quoted) {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); rows.push(row.slice()); row.length = 0; cell = '';
+      } else cell += ch;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row.slice()); }
+    return rows;
+  }
+  function parseCsvGrid(text, palette = [], brand = '') {
+    const rows = parseCsv(text);
+    const clean = value => String(value ?? '').trim();
+    const asHex = value => {
+      const token = clean(value); if (!token) return {valid: true, value: null};
+      const match = token.match(/^#?([a-f\d]{6}|[a-f\d]{3})$/i);
+      if (match) { const hex = match[1].length === 3 ? match[1].split('').map(c => c + c).join('') : match[1]; return {valid: true, value: `#${hex.toUpperCase()}`}; }
+      const found = palette.find(item => Object.values(item.codes || {}).some(code => String(code).toUpperCase() === token.toUpperCase()));
+      return found ? {valid: true, value: found.hex} : {valid: false, value: null};
+    };
+    const dimensionRow = rows.find(row => row[0] && /图纸尺寸|size|dimension/i.test(row[0]));
+    const dimensionText = dimensionRow ? dimensionRow.slice(1).join(' ') : '';
+    const dimension = dimensionText.match(/(\d+)\s*[×x*]\s*(\d+)/i);
+    const sourceBrand = rows.find(row => row[0] && /^(色板|palette|brand)$/i.test(clean(row[0])))?.[1];
+    const marker = rows.findIndex(row => row.some(cell => /逐格|grid|cells|pattern/i.test(clean(cell))));
+    let gridRows = marker >= 0 ? rows.slice(marker + 1) : [];
+    if (marker < 0) {
+      const first = rows.findIndex(row => row.some(cell => asHex(cell).valid && clean(cell)));
+      if (first < 0 && !dimension) throw new Error('CSV 中没有找到色号网格。请使用 #RRGGBB 格式。');
+      gridRows = first < 0 ? rows.slice(-Number(dimension[2])) : rows.slice(first);
+    }
+    const parsedRows = gridRows.map(row => row.map(asHex));
+    const invalid = parsedRows.flat().find(item => !item.valid);
+    if (invalid) throw new Error('CSV 包含无法识别的颜色，请使用 #RRGGBB 格式。');
+    let height = dimension ? Number(dimension[2]) : parsedRows.length;
+    let width = dimension ? Number(dimension[1]) : Math.max(0, ...parsedRows.map(row => row.length));
+    if (!width || !height || width > 500 || height > 500) throw new Error('CSV 图纸尺寸无效，宽高需为 1–500 格。');
+    if (parsedRows.length > height) gridRows = parsedRows.slice(-height); else gridRows = parsedRows;
+    const cells = Array.from({length: width * height}, (_, i) => gridRows[Math.floor(i / width)]?.[i % width]?.value || null);
+    return {cols: width, rows: height, cells, brand: sourceBrand || brand};
+  }
   // Virtual frame: cover crops the source; contain adds transparent margins.
   function fitRegion(region, ratio, fit) {
     let {x: sx, y: sy, width: sw, height: sh} = region;
@@ -87,6 +133,6 @@
     const width = Math.max(sw, sh * ratio), height = width / ratio;
     return {sx, sy, sw, sh, width, height, dx: (width - sw) / 2, dy: (height - sh) / 2};
   }
-  const api = { rgb, distance, nearest, sample, count, quantize, removeBackground, fitRegion };
+  const api = { rgb, distance, nearest, sample, count, quantize, removeBackground, parseCsv, parseCsvGrid, fitRegion };
   if (typeof module !== 'undefined') module.exports = api; else window.BeadCore = api;
 })();

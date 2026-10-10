@@ -3,7 +3,7 @@ const $$ = selector => [...document.querySelectorAll(selector)];
 const core = window.BeadCore;
 const colors = Object.entries(COLOR_MAPPING).map(([hex, codes]) => ({hex, codes, rgb: core.rgb(hex)}));
 const colorMap = new Map(colors.map(c => [c.hex, c]));
-const state = {image: null, crop: null, name: '', brand: 'MARD', grid: 48, fit: 'cover', limit: 18,
+const state = {image: null, source: 'image', crop: null, name: '', brand: 'MARD', grid: 48, fit: 'cover', limit: 18,
   mode: 'dominant', merge: 30, dither: false, background: false, labels: true, showGrid: true,
   zoom: 1, selected: null, cells: [], cols: 0, rows: 0, counts: [], undo: [], fileUrl: null,
   preview: 'pattern', ironStrength: 45, sizeMode: 'ratio', customCols: 48, customRows: 48};
@@ -12,20 +12,36 @@ $('#loadDemo').onclick = () => {
   const image = new Image();
   image.onload = () => {
     if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
-    state.fileUrl = null; state.image = image; state.crop = null; $('#cropImage').disabled = false; state.name = '三色示例';
+    state.fileUrl = null; state.source = 'image'; state.image = image; state.crop = null; $('#cropImage').disabled = false; state.name = '三色示例';
     $('#fileName').textContent = state.name; $('#fileThumb').style.backgroundImage = 'url("tests/sample.png")';
     $('#fileInfo').classList.remove('hidden'); $('#emptyState').classList.add('hidden'); canvas.classList.remove('hidden'); processImage();
   };
   image.src = 'tests/sample.png';
 };
-function code(hex) { return hex ? colorMap.get(hex).codes[state.brand] : ''; }
+function code(hex) { return hex ? (colorMap.get(hex)?.codes?.[state.brand] || hex) : ''; }
 function status(message) { $('#statusMessage').textContent = message; }
 function chooseFile() { $('#fileInput').click(); }
 $('#uploadZone').onclick = $('#emptyUpload').onclick = chooseFile;
 $('#fileInput').onchange = e => { if (e.target.files[0]) loadImage(e.target.files[0]); e.target.value = ''; };
+$('#csvImport').onclick = () => $('#csvInput').click();
+$('#csvInput').onchange = e => { if (e.target.files[0]) importCsv(e.target.files[0]); e.target.value = ''; };
 $('#uploadZone').ondragover = e => { e.preventDefault(); $('#uploadZone').classList.add('dragging'); };
 $('#uploadZone').ondragleave = () => $('#uploadZone').classList.remove('dragging');
-$('#uploadZone').ondrop = e => { e.preventDefault(); $('#uploadZone').classList.remove('dragging'); if (e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]); };
+$('#uploadZone').ondrop = e => { e.preventDefault(); $('#uploadZone').classList.remove('dragging'); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); };
+function loadFile(file) { if (file.type === 'text/csv' || /\.csv$/i.test(file.name)) importCsv(file); else loadImage(file); }
+async function importCsv(file) {
+  try {
+    const result = core.parseCsvGrid(await file.text(), colors, state.brand);
+    clearExports(); if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
+    state.fileUrl = null; state.source = 'csv'; state.crop = null; state.image = {width: result.cols, height: result.rows};
+    state.name = file.name; state.cols = result.cols; state.rows = result.rows; state.cells = result.cells; state.selected = null; state.undo = [];
+    $('#cropImage').disabled = true; $('#fileName').textContent = file.name; $('#fileThumb').textContent = 'CSV'; $('#fileThumb').style.backgroundImage = 'none';
+    $('#fileInfo').classList.remove('hidden'); $('#emptyState').classList.add('hidden'); canvas.classList.remove('hidden');
+    $('#canvasStatus').textContent = file.name; $('#dimensions').textContent = `${result.cols} × ${result.rows}`; $('#sizeStat').textContent = `${result.cols} × ${result.rows}`;
+    $('#pngExport').disabled = $('#ironExport').disabled = $('#csvExport').disabled = false; updateCounts(); drawPattern();
+    status(`已导入 ${result.cols} × ${result.rows} 格 CSV 图纸。空白单元格保持为空。`);
+  } catch (error) { console.error(error); status(error.message || 'CSV 导入失败，请检查格式。'); }
+}
 function loadImage(file) {
   if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return status('请选择 PNG、JPG 或 WEBP 图片。');
   if (file.size > 30 * 1024 * 1024) return status('图片超过 30 MB，请先缩小文件。');
@@ -33,7 +49,7 @@ function loadImage(file) {
   image.onload = () => {
     if (image.width * image.height > 40000000) { URL.revokeObjectURL(url); return status('图片超过 4000 万像素，请先缩小尺寸。'); }
     if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
-    state.fileUrl = url; state.image = image; state.crop = null; $('#cropImage').disabled = false; state.name = file.name;
+    state.fileUrl = url; state.source = 'image'; state.image = image; state.crop = null; $('#cropImage').disabled = false; state.name = file.name;
     $('#fileName').textContent = file.name;
     $('#fileThumb').style.backgroundImage = `url("${url}")`;
     $('#fileInfo').classList.remove('hidden'); $('#emptyState').classList.add('hidden');
@@ -45,7 +61,7 @@ function loadImage(file) {
 $('#removeImage').onclick = () => {
   clearExports();
   if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
-  state.image = null; state.crop = null; $('#cropImage').disabled = true; state.cells = []; state.undo = []; state.selected = null; state.counts = [];
+  state.image = null; state.source = 'image'; state.crop = null; $('#cropImage').disabled = true; state.cells = []; state.undo = []; state.selected = null; state.counts = [];
   canvas.classList.add('hidden'); $('#emptyState').classList.remove('hidden'); $('#fileInfo').classList.add('hidden');
   $('#canvasStatus').textContent = '等待一张图片'; $('#dimensions').textContent = '— × —';
   $('#totalCount').textContent = $('#usedColors').textContent = $('#sizeStat').textContent = '—';
@@ -104,7 +120,7 @@ $('#clearSelection').onclick = () => { state.selected = null; renderPalette(); }
 $('#eraseEdit').onclick = () => { state.selected = state.selected === 'erase' ? null : 'erase'; renderPalette(); };
 $('#undoEdit').onclick = () => { if (state.undo.length) { state.cells = state.undo.pop(); updateCounts(); drawPattern(); } };
 function processImage() {
-  if (!state.image) return;
+  if (!state.image || state.source === 'csv') return;
   status('正在生成…');
   try {
     const image = state.image;
@@ -224,7 +240,7 @@ function download(blob, name) {
   status('导出文件已生成。若未自动下载，请点击图纸下方的下载链接。');
 }
 $('#pngExport').onclick = () => {
-  if (!state.image) return;
+  if (!state.image || !state.cells.length) return;
   const out = document.createElement('canvas'), cell = 24, left = 50, top = 112;
   const width = Math.max(650, state.cols * cell + 100), legendCols = Math.floor((width - 100) / 160);
   const legendTop = top + state.rows * cell + 50;
@@ -260,8 +276,8 @@ $('#ironExport').onclick = () => {
 $('#csvExport').onclick = () => {
   const rows = [['色板',state.brand],['图纸尺寸',`${state.cols} × ${state.rows}`],[],['色号','HEX','数量']];
   state.counts.forEach(([hex,count])=>rows.push([code(hex),hex,count]));
-  rows.push([],['总颗数',state.counts.reduce((n,v)=>n+v[1],0)],[],['逐格色号（空格不放豆）']);
-  for(let y=0;y<state.rows;y++) rows.push(state.cells.slice(y*state.cols,(y+1)*state.cols).map(code));
+  rows.push([],['总颗数',state.counts.reduce((n,v)=>n+v[1],0)],[],['逐格 HEX（空格不放豆）']);
+  for(let y=0;y<state.rows;y++) rows.push(state.cells.slice(y*state.cols,(y+1)*state.cols).map(hex => hex || ''));
   const csv='\ufeff'+rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\r\n');
   download(new Blob([csv],{type:'text/csv;charset=utf-8'}),'dou-dian-pattern.csv');
 };
