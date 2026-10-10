@@ -29,3 +29,20 @@ assert.equal(cleared[4], subject);
 const withTransparent = [background,background,background,background,null,background,background,background,background];
 assert.deepEqual(core.removeBackground(withTransparent, 3), Array(9).fill(null));
 console.log('PASS: 291 colors map to five brands; dominant/average sampling, alpha handling, RGB matching, color limits, and edge background removal.');
+
+// Cropping respects the selected original-image offset and never stretches photos.
+assert.deepEqual(core.fitRegion({x:20,y:30,width:200,height:100},1,'cover'),
+  {sx:70,sy:30,sw:100,sh:100,width:100,height:100,dx:0,dy:0});
+assert.deepEqual(core.fitRegion({x:20,y:30,width:100,height:200},2,'cover'),
+  {sx:20,sy:105,sw:100,sh:50,width:100,height:50,dx:0,dy:0});
+assert.deepEqual(core.fitRegion({x:20,y:30,width:200,height:100},1,'contain'),
+  {sx:20,sy:30,sw:200,sh:100,width:200,height:200,dx:0,dy:50});
+for (const ratio of [1/300, 60/72, 1, 300]) for (const fit of ['cover','contain']) {
+  const region = {x:7,y:19,width:150,height:97};
+  const frame = core.fitRegion(region,ratio,fit);
+  assert.ok(Math.abs(frame.width/frame.height-ratio)<1e-8);
+  assert.ok(frame.sx>=region.x && frame.sy>=region.y);
+  assert.ok(frame.sx+frame.sw<=region.x+region.width+1e-8);
+  assert.ok(frame.sy+frame.sh<=region.y+region.height+1e-8);
+  assert.ok(frame.dx>=0 && frame.dy>=0);
+}

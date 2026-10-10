@@ -3,8 +3,8 @@ const $$ = selector => [...document.querySelectorAll(selector)];
 const core = window.BeadCore;
 const colors = Object.entries(COLOR_MAPPING).map(([hex, codes]) => ({hex, codes, rgb: core.rgb(hex)}));
 const colorMap = new Map(colors.map(c => [c.hex, c]));
-const state = {image: null, name: '', brand: 'MARD', grid: 48, fit: 'contain', limit: 18,
-  mode: 'dominant', merge: 0, dither: false, background: false, labels: true, showGrid: true,
+const state = {image: null, crop: null, name: '', brand: 'MARD', grid: 48, fit: 'cover', limit: 18,
+  mode: 'dominant', merge: 30, dither: false, background: false, labels: true, showGrid: true,
   zoom: 1, selected: null, cells: [], cols: 0, rows: 0, counts: [], undo: [], fileUrl: null,
   preview: 'pattern', ironStrength: 45, sizeMode: 'ratio', customCols: 48, customRows: 48};
 const canvas = $('#patternCanvas'), ctx = canvas.getContext('2d');
@@ -12,7 +12,7 @@ $('#loadDemo').onclick = () => {
   const image = new Image();
   image.onload = () => {
     if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
-    state.fileUrl = null; state.image = image; state.name = '三色示例';
+    state.fileUrl = null; state.image = image; state.crop = null; $('#cropImage').disabled = false; state.name = '三色示例';
     $('#fileName').textContent = state.name; $('#fileThumb').style.backgroundImage = 'url("tests/sample.png")';
     $('#fileInfo').classList.remove('hidden'); $('#emptyState').classList.add('hidden'); canvas.classList.remove('hidden'); processImage();
   };
@@ -33,7 +33,7 @@ function loadImage(file) {
   image.onload = () => {
     if (image.width * image.height > 40000000) { URL.revokeObjectURL(url); return status('图片超过 4000 万像素，请先缩小尺寸。'); }
     if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
-    state.fileUrl = url; state.image = image; state.name = file.name;
+    state.fileUrl = url; state.image = image; state.crop = null; $('#cropImage').disabled = false; state.name = file.name;
     $('#fileName').textContent = file.name;
     $('#fileThumb').style.backgroundImage = `url("${url}")`;
     $('#fileInfo').classList.remove('hidden'); $('#emptyState').classList.add('hidden');
@@ -45,7 +45,7 @@ function loadImage(file) {
 $('#removeImage').onclick = () => {
   clearExports();
   if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
-  state.image = null; state.cells = []; state.undo = []; state.selected = null; state.counts = [];
+  state.image = null; state.crop = null; $('#cropImage').disabled = true; state.cells = []; state.undo = []; state.selected = null; state.counts = [];
   canvas.classList.add('hidden'); $('#emptyState').classList.remove('hidden'); $('#fileInfo').classList.add('hidden');
   $('#canvasStatus').textContent = '等待一张图片'; $('#dimensions').textContent = '— × —';
   $('#totalCount').textContent = $('#usedColors').textContent = $('#sizeStat').textContent = '—';
@@ -53,7 +53,7 @@ $('#removeImage').onclick = () => {
   $('#colorList').innerHTML = '<div class="palette-empty">上传图片后，这里会列出每种拼豆的色号和数量。</div>'; status('');
 };
 let timer;
-function schedule() { clearTimeout(timer); timer = setTimeout(processImage, 120); }
+function schedule() { clearTimeout(timer); timer = setTimeout(() => { timer = null; processImage(); }, 120); }
 $('#widthRange').oninput = e => {
   state.grid = +e.target.value; $('#widthValue').textContent = state.grid;
   const percent = (state.grid - 10) / 290 * 100;
@@ -76,7 +76,7 @@ $('#customCols').onchange = $('#customRows').onchange = e => {
 };
 $('#colorLimit').onchange = e => { state.limit = +e.target.value; processImage(); };
 $('#modeSelect').onchange = e => { state.mode = e.target.value; processImage(); };
-$('#mergeRange').oninput = e => { state.merge = +e.target.value; $('#mergeValue').textContent = state.merge; schedule(); };
+$('#mergeRange').oninput = e => { state.merge = +e.target.value; $('#mergeValue').textContent = state.merge; e.target.style.background = `linear-gradient(90deg,var(--coral) ${state.merge / 120 * 100}%,#ebe6df 0)`; schedule(); };
 $('#ditherToggle').onchange = e => { state.dither = e.target.checked; processImage(); };
 $('#backgroundToggle').onchange = e => { state.background = e.target.checked; processImage(); };
 $('#labelsToggle').onchange = e => { state.labels = e.target.checked; drawPattern(); };
@@ -89,7 +89,7 @@ $$('.preview-modes [data-preview]').forEach(button => button.onclick = () => {
 });
 $('#ironStrength').oninput = e => { state.ironStrength = +e.target.value; $('#ironStrengthValue').textContent = `${state.ironStrength}%`; drawPattern(); };
 $$('#orientation button').forEach(button => button.onclick = () => {
-  $$('#orientation button').forEach(b => b.classList.toggle('active', b === button));
+  $('#orientation button').forEach(b => { b.classList.toggle('active', b === button); b.setAttribute('aria-pressed', String(b === button)); });
   state.fit = button.dataset.fit; processImage();
 });
 $$('.brand-choice').forEach(button => button.onclick = () => {
@@ -108,20 +108,18 @@ function processImage() {
   status('正在生成…');
   try {
     const image = state.image;
+    const region = state.crop || {x: 0, y: 0, width: image.width, height: image.height};
     let cols = state.sizeMode === 'ratio' ? state.grid : state.sizeMode === 'custom' ? state.customCols : +state.sizeMode;
-    let rows = state.sizeMode === 'ratio' ? Math.max(1, Math.round(cols * (state.fit === 'cover' ? 1 : image.height / image.width))) : state.sizeMode === 'custom' ? state.customRows : +state.sizeMode;
+    let rows = state.sizeMode === 'ratio' ? Math.max(1, Math.round(cols * (state.fit === 'cover' ? 1 : region.height / region.width))) : state.sizeMode === 'custom' ? state.customRows : +state.sizeMode;
     if (state.sizeMode === 'ratio' && rows > 300) { cols = Math.max(1, Math.round(cols * 300 / rows)); rows = 300; }
-    const targetRatio = cols / rows, imageRatio = image.width / image.height;
-    const crop = state.fit === 'cover';
-    let sx = 0, sy = 0, sourceW = image.width, sourceH = image.height;
-    if (crop && imageRatio > targetRatio) { sourceW = image.height * targetRatio; sx = (image.width - sourceW) / 2; }
-    else if (crop && imageRatio < targetRatio) { sourceH = image.width / targetRatio; sy = (image.height - sourceH) / 2; }
-    const factor = Math.min(1, 2048 / Math.max(sourceW, sourceH));
+    const frame = core.fitRegion(region, cols / rows, state.fit);
+    const factor = Math.min(1, 2048 / Math.max(frame.width, frame.height));
     const source = document.createElement('canvas');
-    source.width = Math.max(cols, Math.round(sourceW * factor)); source.height = Math.max(rows, Math.round(sourceH * factor));
+    source.width = Math.max(cols, Math.round(frame.width * factor)); source.height = Math.max(rows, Math.round(frame.height * factor));
     const context = source.getContext('2d', {willReadFrequently: true});
-    context.drawImage(image, sx, sy,
-      sourceW, sourceH, 0, 0, source.width, source.height);
+    const scaleX = source.width / frame.width, scaleY = source.height / frame.height;
+    context.drawImage(image, frame.sx, frame.sy, frame.sw, frame.sh,
+      frame.dx * scaleX, frame.dy * scaleY, frame.sw * scaleX, frame.sh * scaleY);
     const samples = core.sample(context.getImageData(0, 0, source.width, source.height).data, source.width, source.height, cols, rows, state.mode);
     let cells = core.quantize(samples, cols, colors, state.limit, state.dither, state.merge);
     if (state.background) cells = core.removeBackground(cells, cols);
@@ -221,7 +219,7 @@ function download(blob, name) {
   const prior = exportUrls.get(name);
   if (prior) { URL.revokeObjectURL(prior.url); prior.link.remove(); }
   const url = URL.createObjectURL(blob), a = document.createElement('a');
-  a.href = url; a.download = name; a.textContent = name.endsWith('.png') ? '下载已生成的 PNG 图纸' : '下载已生成的 CSV 清单';
+  a.href = url; a.download = name; a.textContent = name.includes('ironed') ? '下载已生成的烫面效果 PNG' : name.endsWith('.png') ? '下载已生成的 PNG 图纸' : '下载已生成的 CSV 清单';
   $('#exportLinks').append(a); exportUrls.set(name, {url, link:a}); a.click();
   status('导出文件已生成。若未自动下载，请点击图纸下方的下载链接。');
 }

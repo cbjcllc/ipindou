@@ -76,6 +76,17 @@
     }
     return out;
   }
-  const api = { rgb, distance, nearest, sample, count, quantize, removeBackground };
+  // Virtual frame: cover crops the source; contain adds transparent margins.
+  function fitRegion(region, ratio, fit) {
+    let {x: sx, y: sy, width: sw, height: sh} = region;
+    if (fit === 'cover') {
+      if (sw / sh > ratio) { const w = sh * ratio; sx += (sw - w) / 2; sw = w; }
+      else { const h = sw / ratio; sy += (sh - h) / 2; sh = h; }
+      return {sx, sy, sw, sh, width: sw, height: sh, dx: 0, dy: 0};
+    }
+    const width = Math.max(sw, sh * ratio), height = width / ratio;
+    return {sx, sy, sw, sh, width, height, dx: (width - sw) / 2, dy: (height - sh) / 2};
+  }
+  const api = { rgb, distance, nearest, sample, count, quantize, removeBackground, fitRegion };
   if (typeof module !== 'undefined') module.exports = api; else window.BeadCore = api;
 })();
