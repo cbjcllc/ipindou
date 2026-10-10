@@ -5,7 +5,7 @@ const colors = Object.entries(COLOR_MAPPING).map(([hex, codes]) => ({hex, codes,
 const colorMap = new Map(colors.map(c => [c.hex, c]));
 const state = {image: null, source: 'image', crop: null, name: '', brand: 'MARD', grid: 48, fit: 'cover', limit: 18,
   mode: 'dominant', merge: 30, dither: false, background: false, labels: true, showGrid: true,
-  zoom: 1, selected: null, cells: [], cols: 0, rows: 0, counts: [], undo: [], fileUrl: null,
+  zoomByPreview: {pattern: 1, ironed: 1}, selected: null, cells: [], cols: 0, rows: 0, counts: [], undo: [], fileUrl: null,
   preview: 'pattern', ironStrength: 45, sizeMode: 'ratio', customCols: 48, customRows: 48};
 const canvas = $('#patternCanvas'), ctx = canvas.getContext('2d');
 $('#loadDemo').onclick = () => {
@@ -101,6 +101,7 @@ $$('.preview-modes [data-preview]').forEach(button => button.onclick = () => {
   $$('.preview-modes [data-preview]').forEach(b => b.classList.toggle('active', b === button));
   $('#ironStrengthControl').classList.toggle('hidden', state.preview !== 'ironed');
   $('#undoEdit').disabled = state.preview === 'ironed' || !state.undo.length;
+  updateZoomLabel();
   drawPattern();
 });
 $('#ironStrength').oninput = e => { state.ironStrength = +e.target.value; $('#ironStrengthValue').textContent = `${state.ironStrength}%`; drawPattern(); };
@@ -114,7 +115,12 @@ $$('.brand-choice').forEach(button => button.onclick = () => {
   if (state.image) { updateCounts(); drawPattern(); }
 });
 $('#gridToggle').onclick = () => { state.showGrid = !state.showGrid; $('#gridToggle').classList.toggle('active', state.showGrid); drawPattern(); };
-function zoom(delta) { state.zoom = Math.max(.5, Math.min(5, state.zoom + delta)); $('#zoomLabel').textContent = `${Math.round(state.zoom * 100)}%`; drawPattern(); }
+function currentZoom() { return state.zoomByPreview[state.preview] || 1; }
+function updateZoomLabel() { $('#zoomLabel').textContent = `${Math.round(currentZoom() * 100)}%`; }
+function zoom(delta) {
+  state.zoomByPreview[state.preview] = Math.max(.5, Math.min(5, currentZoom() + delta));
+  updateZoomLabel(); drawPattern();
+}
 $('#zoomIn').onclick = () => zoom(.5); $('#zoomOut').onclick = () => zoom(-.5);
 $('#clearSelection').onclick = () => { state.selected = null; renderPalette(); };
 $('#eraseEdit').onclick = () => { state.selected = state.selected === 'erase' ? null : 'erase'; renderPalette(); };
@@ -209,7 +215,7 @@ function paintIroned(context, cell, strength = state.ironStrength) {
 function drawPattern() {
   if (!state.image) return;
   const base = Math.min(1, 560 / (state.cols * 18), 430 / (state.rows * 18));
-  const cell = Math.max(2, Math.round(18 * base * state.zoom));
+  const cell = Math.max(2, Math.round(18 * base * currentZoom()));
   canvas.width = state.cols * cell; canvas.height = state.rows * cell;
   canvas.style.width = `${canvas.width}px`; canvas.style.height = `${canvas.height}px`;
   if (state.preview === 'ironed') paintIroned(ctx, cell);
