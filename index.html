@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#faf8f4" />
+  <title>豆点 Perler Studio · 图片转拼豆图纸</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="豆点拼豆工作室首页"><span class="brand-mark">✳</span><span>豆点<span class="brand-en">PERLER STUDIO</span></span></a>
+    <div class="top-meta"><span class="local-badge"><i></i> 图片仅在本机处理</span><a href="#guide">使用指南</a></div>
+  </header>
+
+  <main class="shell">
+    <section class="intro">
+      <div class="intro-copy"><div class="eyebrow"><span>01</span> MAKE SOMETHING SMALL</div><h1>把喜欢的画面，<em>拼出来。</em></h1><p>上传一张图片，生成可以跟着拼的像素图纸。调格数、换色号、逐格微调，然后带着清单去找你的拼豆。</p></div>
+      <div class="intro-stamp"><span>MADE<br>BY YOU</span><b>♥</b></div>
+    </section>
+
+    <section class="workspace" aria-label="拼豆图纸工作区">
+      <aside class="controls card">
+        <div class="card-heading"><span class="step">01</span><div><h2>准备画布</h2><p>从一张图片开始</p></div></div>
+        <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+        <button id="uploadZone" class="upload-zone" type="button">
+          <span class="upload-icon">↥</span><strong>选择一张图片</strong><span>或把图片拖到这里</span><small>PNG、JPG、WEBP · 图片不会上传</small>
+        </button>
+        <div id="fileInfo" class="file-info hidden"><span class="file-thumb" id="fileThumb"></span><span class="file-name" id="fileName">—</span><button id="removeImage" class="icon-button" aria-label="移除图片">×</button></div>
+
+        <div class="divider"></div>
+        <div class="card-heading compact"><span class="step">02</span><div><h2>设置图纸</h2><p>先从小尺寸试试看</p></div></div>
+        <label class="field-label" for="widthRange"><span>横向格数</span><span class="value"><b id="widthValue">48</b><small>格</small></span></label>
+        <input id="widthRange" type="range" min="10" max="300" value="48" />
+        <div class="range-ends"><span>10</span><span>300</span></div>
+        <div class="setting-line"><span>图纸方向</span><div class="segmented" id="orientation"><button class="active" data-fit="contain">完整显示</button><button data-fit="cover">填满画布</button></div></div>
+        <div class="setting-line"><span>颜色数量</span><select id="colorLimit" aria-label="颜色数量"><option value="0">完整色板</option><option value="48">48 色</option><option value="32">32 色</option><option value="24">24 色</option><option value="18" selected>18 色</option><option value="12">12 色</option></select></div>
+        <div class="setting-line"><label for="modeSelect">取色方式</label><select id="modeSelect"><option value="dominant" selected>主色（卡通）</option><option value="average">平均色（照片）</option></select></div>
+        <label class="field-label" for="mergeRange"><span>合并相近颜色</span><span class="value"><b id="mergeValue">0</b><small>阈值</small></span></label><input id="mergeRange" type="range" min="0" max="120" value="0" /><div class="range-ends"><span>关闭</span><span>强</span></div>
+        <label class="toggle-row"><span><b>颜色抖动</b><small>让渐变看起来更柔和</small></span><input type="checkbox" id="ditherToggle"><i class="switch"></i></label>
+        <label class="toggle-row"><span><b>自动去背景</b><small>移除与边缘连通的主背景色</small></span><input type="checkbox" id="backgroundToggle"><i class="switch"></i></label>
+        <label class="toggle-row"><span><b>显示色号</b><small>在图纸格子内标注色号</small></span><input type="checkbox" id="labelsToggle" checked><i class="switch"></i></label>
+
+        <div class="divider"></div>
+        <div class="card-heading compact"><span class="step">03</span><div><h2>选择色板</h2><p>按品牌匹配拼豆颜色</p></div></div>
+        <div class="brand-options" id="brandOptions"><button class="brand-choice active" data-brand="MARD">MARD 291 <small>经典色板</small></button><button class="brand-choice" data-brand="COCO">COCO <small>品牌色号</small></button><button class="brand-choice" data-brand="漫漫">漫漫 <small>品牌色号</small></button><button class="brand-choice" data-brand="盼盼">盼盼 <small>品牌色号</small></button><button class="brand-choice" data-brand="咪小窝">咪小窝 <small>品牌色号</small></button></div>
+        <div class="tip"><span>✳</span><p>主体清楚、背景简单的图片，转换效果会更好。建议头像从 40 格左右开始。</p></div><p id="statusMessage" class="status-message" role="status" aria-live="polite"></p>
+      </aside>
+
+      <section class="preview-column">
+        <div class="preview-head"><div><div class="eyebrow"><span>YOUR PATTERN</span><i></i><span id="canvasStatus">等待一张图片</span></div><h2>图纸预览</h2></div><div class="view-tools"><button id="zoomOut" class="tool-button" aria-label="缩小">−</button><span id="zoomLabel">100%</span><button id="zoomIn" class="tool-button" aria-label="放大">＋</button><span class="tool-separator"></span><button id="gridToggle" class="tool-button active" aria-label="切换网格" title="切换网格">▦</button><button id="undoEdit" class="tool-button" aria-label="撤销修改" title="撤销修改" disabled>↶</button></div></div>
+        <div class="canvas-card card" id="canvasCard"><div class="canvas-scroll">
+          <div class="empty-state" id="emptyState"><div class="empty-art"><div class="sample-pixels"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span>?</span></div><h3>你的下一件小作品</h3><p>选择图片后，拼豆图纸会出现在这里</p><button id="emptyUpload" class="text-button">选择图片 <span>↗</span></button><button id="loadDemo" class="text-button">试用三色示例</button></div>
+          <canvas id="patternCanvas" class="hidden" aria-label="可编辑的拼豆网格图纸"></canvas>
+          </div><div class="canvas-footer"><span><i class="live-dot"></i><span id="canvasHint">选中颜色后点击图纸可改色</span></span><span id="dimensions">— × —</span></div>
+        </div>
+        <div class="stats-row"><div class="stat-card"><span class="stat-icon peach">▦</span><div><small>豆豆总数</small><strong id="totalCount">—</strong></div><span class="stat-unit">颗</span></div><div class="stat-card"><span class="stat-icon lavender">◉</span><div><small>使用色号</small><strong id="usedColors">—</strong></div><span class="stat-unit">种</span></div><div class="stat-card"><span class="stat-icon mint">↔</span><div><small>图纸尺寸</small><strong id="sizeStat">—</strong></div><span class="stat-unit">格</span></div></div>
+        <section class="palette-card card"><div class="palette-header"><div><div class="eyebrow">COLOR INVENTORY</div><h3>颜色与用量 <span id="paletteBrand">MARD</span></h3></div><div class="palette-actions"><button id="eraseEdit" class="erase-button" title="擦除拼豆" aria-label="擦除拼豆">⌫</button><button id="csvExport" class="text-button" disabled>下载清单 <span>↓</span></button></div></div><div id="colorList" class="color-list"><div class="palette-empty">上传图片后，这里会列出每种拼豆的色号和数量。</div></div><div class="palette-footer"><span>点击颜色后，在图纸上点格子即可修改</span><button id="clearSelection" class="clear-selection hidden">取消选色</button></div></section>
+        <div class="export-bar"><div><strong>图纸准备好了？</strong><span>导出高清 PNG，打印出来就能开始拼。</span></div><button id="pngExport" class="export-button" disabled><span>导出图纸</span><b>↓</b></button></div>
+<div id="exportLinks" class="export-links" aria-live="polite"></div>
+      </section>
+    </section>
+
+    <section class="guide" id="guide"><div class="guide-title"><span class="eyebrow">A LITTLE GUIDE</span><h2>从图片到拼豆，<em>就三步。</em></h2></div><div class="guide-steps"><article><span>01</span><h3>挑一张喜欢的图</h3><p>主体越清楚，做出来越像。宠物、像素画和简单插画都很适合。</p></article><article><span>02</span><h3>调格数和颜色</h3><p>格数决定作品大小，色板帮你找到手边能买到的相近拼豆。</p></article><article><span>03</span><h3>照着图纸拼起来</h3><p>看每格的色号和采购清单，导出图纸，开始你的桌面小工程。</p></article></div></section>
+    <footer><a class="brand footer-brand" href="#"><span class="brand-mark">✳</span><span>豆点<span class="brand-en">PERLER STUDIO</span></span></a><span>做小小的东西，也很有意义。 <b>♥</b></span><span>图片只在你的浏览器处理</span></footer>
+  </main>
+  <script src="palette-data.js"></script><script src="core.js"></script><script src="app.js"></script>
+</body>
+</html>
+
