@@ -5,7 +5,8 @@ const colors = Object.entries(COLOR_MAPPING).map(([hex, codes]) => ({hex, codes,
 const colorMap = new Map(colors.map(c => [c.hex, c]));
 const state = {image: null, name: '', brand: 'MARD', grid: 48, fit: 'contain', limit: 18,
   mode: 'dominant', merge: 0, dither: false, background: false, labels: true, showGrid: true,
-  zoom: 1, selected: null, cells: [], cols: 0, rows: 0, counts: [], undo: [], fileUrl: null};
+  zoom: 1, selected: null, cells: [], cols: 0, rows: 0, counts: [], undo: [], fileUrl: null,
+  preview: 'pattern', ironStrength: 45};
 const canvas = $('#patternCanvas'), ctx = canvas.getContext('2d');
 $('#loadDemo').onclick = () => {
   const image = new Image();
@@ -48,7 +49,7 @@ $('#removeImage').onclick = () => {
   canvas.classList.add('hidden'); $('#emptyState').classList.remove('hidden'); $('#fileInfo').classList.add('hidden');
   $('#canvasStatus').textContent = '等待一张图片'; $('#dimensions').textContent = '— × —';
   $('#totalCount').textContent = $('#usedColors').textContent = $('#sizeStat').textContent = '—';
-  $('#clearSelection').classList.add('hidden'); $('#pngExport').disabled = $('#csvExport').disabled = $('#undoEdit').disabled = true;
+  $('#clearSelection').classList.add('hidden'); $('#pngExport').disabled = $('#ironExport').disabled = $('#csvExport').disabled = $('#undoEdit').disabled = true;
   $('#colorList').innerHTML = '<div class="palette-empty">上传图片后，这里会列出每种拼豆的色号和数量。</div>'; status('');
 };
 let timer;
@@ -64,6 +65,14 @@ $('#mergeRange').oninput = e => { state.merge = +e.target.value; $('#mergeValue'
 $('#ditherToggle').onchange = e => { state.dither = e.target.checked; processImage(); };
 $('#backgroundToggle').onchange = e => { state.background = e.target.checked; processImage(); };
 $('#labelsToggle').onchange = e => { state.labels = e.target.checked; drawPattern(); };
+$$('.preview-modes [data-preview]').forEach(button => button.onclick = () => {
+  state.preview = button.dataset.preview;
+  $$('.preview-modes [data-preview]').forEach(b => b.classList.toggle('active', b === button));
+  $('#ironStrengthControl').classList.toggle('hidden', state.preview !== 'ironed');
+  $('#undoEdit').disabled = state.preview === 'ironed' || !state.undo.length;
+  drawPattern();
+});
+$('#ironStrength').oninput = e => { state.ironStrength = +e.target.value; $('#ironStrengthValue').textContent = `${state.ironStrength}%`; drawPattern(); };
 $$('#orientation button').forEach(button => button.onclick = () => {
   $$('#orientation button').forEach(b => b.classList.toggle('active', b === button));
   state.fit = button.dataset.fit; processImage();
@@ -100,7 +109,7 @@ function processImage() {
     state.cols = cols; state.rows = rows; state.cells = cells; state.selected = null; state.undo = [];
     $('#canvasStatus').textContent = state.name; $('#dimensions').textContent = `${cols} × ${rows}`;
     $('#sizeStat').textContent = `${cols} × ${rows}`;
-    $('#pngExport').disabled = $('#csvExport').disabled = false;
+    $('#pngExport').disabled = $('#ironExport').disabled = $('#csvExport').disabled = false;
     updateCounts(); drawPattern();
     status(`已生成 ${cols} × ${rows} 格图纸。调整转换参数会重新生成并清除手动修改。`);
   } catch (error) { console.error(error); status('生成失败，请降低格数或换一张图片重试。'); }
@@ -110,7 +119,7 @@ function updateCounts() {
   state.counts = core.count(state.cells);
   $('#totalCount').textContent = state.counts.reduce((n, item) => n + item[1], 0).toLocaleString();
   $('#usedColors').textContent = state.counts.length;
-  $('#undoEdit').disabled = !state.undo.length; renderPalette();
+  $('#undoEdit').disabled = state.preview === 'ironed' || !state.undo.length; renderPalette();
 }
 function renderPalette() {
   $('#clearSelection').classList.toggle('hidden', state.selected === null);
@@ -138,16 +147,44 @@ function paintGrid(context, cell, left = 0, top = 0, labels = false, grid = true
     if (hex && labels) { context.fillStyle = contrast(hex); context.font = `${Math.max(7, cell * .29)}px monospace`; context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillText(code(hex), left + x*cell + cell/2, top + y*cell + cell/2, cell - 2); }
   }
 }
+function paintIroned(context, cell, strength = state.ironStrength) {
+  const width = state.cols * cell, height = state.rows * cell;
+  for (let y = 0; y < state.rows; y++) for (let x = 0; x < state.cols; x++) {
+    context.fillStyle = (x + y) % 2 ? '#f3f1eb' : '#fff';
+    context.fillRect(x * cell, y * cell, cell, cell);
+  }
+  const beads = document.createElement('canvas'); beads.width = width; beads.height = height;
+  const beadCtx = beads.getContext('2d');
+  for (let y = 0; y < state.rows; y++) for (let x = 0; x < state.cols; x++) {
+    const hex = state.cells[y * state.cols + x];
+    if (!hex) continue;
+    const cx = (x + .5) * cell, cy = (y + .5) * cell, radius = cell * .66;
+    beadCtx.fillStyle = hex; beadCtx.beginPath(); beadCtx.arc(cx, cy, radius, 0, Math.PI * 2); beadCtx.fill();
+  }
+  const blur = cell * (.012 + strength / 100 * .17);
+  context.save(); context.filter = `blur(${blur.toFixed(2)}px)`; context.drawImage(beads, 0, 0); context.restore();
+  context.drawImage(beads, 0, 0);
+  // A restrained highlight gives the fused surface some plastic sheen.
+  context.save(); context.globalAlpha = .11; context.fillStyle = '#fff';
+  for (let y = 0; y < state.rows; y++) for (let x = 0; x < state.cols; x++) {
+    if (!state.cells[y * state.cols + x]) continue;
+    const cx = (x + .5) * cell, cy = (y + .5) * cell;
+    context.beginPath(); context.ellipse(cx - cell * .15, cy - cell * .2, cell * .18, cell * .08, -.45, 0, Math.PI * 2); context.fill();
+  }
+  context.restore();
+}
 function drawPattern() {
   if (!state.image) return;
   const base = Math.min(1, 560 / (state.cols * 18), 430 / (state.rows * 18));
   const cell = Math.max(2, Math.round(18 * base * state.zoom));
   canvas.width = state.cols * cell; canvas.height = state.rows * cell;
   canvas.style.width = `${canvas.width}px`; canvas.style.height = `${canvas.height}px`;
-  paintGrid(ctx, cell, 0, 0, state.labels && cell >= 14, state.showGrid);
+  if (state.preview === 'ironed') paintIroned(ctx, cell);
+  else paintGrid(ctx, cell, 0, 0, state.labels && cell >= 14, state.showGrid);
+  canvas.style.cursor = state.preview === 'ironed' ? 'default' : 'crosshair';
 }
 canvas.onclick = e => {
-  if (state.selected === null || !state.image) return;
+  if (state.preview !== 'pattern' || state.selected === null || !state.image) return;
   const rect = canvas.getBoundingClientRect(), x = Math.floor((e.clientX-rect.left)/rect.width*state.cols), y = Math.floor((e.clientY-rect.top)/rect.height*state.rows);
   if (x < 0 || x >= state.cols || y < 0 || y >= state.rows) return;
   const value = state.selected === 'erase' ? null : state.selected, i = y * state.cols + x;
@@ -189,6 +226,19 @@ $('#pngExport').onclick = () => {
   state.counts.forEach(([hex,count],i)=>{const x=left+(i%legendCols)*160,y=legendTop+Math.floor(i/legendCols)*34;context.fillStyle=hex;context.fillRect(x,y,22,22);context.strokeStyle='#999';context.lineWidth=.5;context.strokeRect(x,y,22,22);context.fillStyle='#333';context.font='13px monospace';context.textAlign='left';context.fillText(`${code(hex)} × ${count}`,x+30,y+11);});
   context.textAlign='left';context.fillStyle='#777';context.font='12px sans-serif';context.fillText('空白棋盘格不放豆 · 色彩以实体色卡为准',left,out.height-23);
   out.toBlob(blob => download(blob,'dou-dian-pattern.png'),'image/png');
+};
+$('#ironExport').onclick = () => {
+  if (!state.image) return;
+  const cell = 32, margin = 32, header = 76;
+  const out = document.createElement('canvas'); out.width = state.cols * cell + margin * 2; out.height = state.rows * cell + header + margin;
+  const context = out.getContext('2d'); context.fillStyle = '#fff'; context.fillRect(0, 0, out.width, out.height);
+  context.fillStyle = '#27251f'; context.font = 'bold 24px sans-serif'; context.fillText('豆点 · 烫面晕染效果', margin, 34);
+  context.font = '14px sans-serif'; context.fillStyle = '#777'; context.fillText(`${state.cols} × ${state.rows} 格 | 晕染强度 ${state.ironStrength}% | 成品效果预览`, margin, 60);
+  // paintIroned starts at the canvas origin; render onto a temporary layer to place it below the title.
+  const preview = document.createElement('canvas'); preview.width = state.cols * cell; preview.height = state.rows * cell;
+  paintIroned(preview.getContext('2d'), cell, state.ironStrength);
+  context.clearRect(0, 76, out.width, out.height - 76); context.drawImage(preview, margin, header);
+  out.toBlob(blob => download(blob, 'dou-dian-ironed-preview.png'), 'image/png');
 };
 $('#csvExport').onclick = () => {
   const rows = [['色板',state.brand],['图纸尺寸',`${state.cols} × ${state.rows}`],[],['色号','HEX','数量']];
