@@ -6,7 +6,7 @@ const colorMap = new Map(colors.map(c => [c.hex, c]));
 const state = {image: null, name: '', brand: 'MARD', grid: 48, fit: 'contain', limit: 18,
   mode: 'dominant', merge: 0, dither: false, background: false, labels: true, showGrid: true,
   zoom: 1, selected: null, cells: [], cols: 0, rows: 0, counts: [], undo: [], fileUrl: null,
-  preview: 'pattern', ironStrength: 45};
+  preview: 'pattern', ironStrength: 45, sizeMode: 'ratio', customCols: 48, customRows: 48};
 const canvas = $('#patternCanvas'), ctx = canvas.getContext('2d');
 $('#loadDemo').onclick = () => {
   const image = new Image();
@@ -59,6 +59,21 @@ $('#widthRange').oninput = e => {
   const percent = (state.grid - 10) / 290 * 100;
   e.target.style.background = `linear-gradient(90deg,var(--coral) ${percent}%,#ebe6df ${percent}%)`; schedule();
 };
+$('#gridSizeSelect').onchange = e => {
+  state.sizeMode = e.target.value;
+  const custom = state.sizeMode === 'custom', ratio = state.sizeMode === 'ratio';
+  $('#customSizeFields').classList.toggle('hidden', !custom);
+  $('#ratioWidthLabel').classList.toggle('hidden', !ratio);
+  $('#widthRange').classList.toggle('hidden', !ratio);
+  $('#ratioWidthEnds').classList.toggle('hidden', !ratio);
+  if (state.image) processImage();
+};
+$('#customCols').onchange = $('#customRows').onchange = e => {
+  const value = Math.max(1, Math.min(300, Math.round(+e.target.value || 1)));
+  e.target.value = value;
+  state.customCols = +$('#customCols').value; state.customRows = +$('#customRows').value;
+  if (state.sizeMode === 'custom' && state.image) processImage();
+};
 $('#colorLimit').onchange = e => { state.limit = +e.target.value; processImage(); };
 $('#modeSelect').onchange = e => { state.mode = e.target.value; processImage(); };
 $('#mergeRange').oninput = e => { state.merge = +e.target.value; $('#mergeValue').textContent = state.merge; schedule(); };
@@ -92,16 +107,20 @@ function processImage() {
   if (!state.image) return;
   status('正在生成…');
   try {
-    const image = state.image, square = state.fit === 'cover';
-    let cols = state.grid, rows = Math.max(1, Math.round(cols * (square ? 1 : image.height / image.width)));
-    if (rows > 300) { cols = Math.max(1, Math.round(cols * 300 / rows)); rows = 300; }
-    const side = Math.min(image.width, image.height);
-    const sourceW = square ? side : image.width, sourceH = square ? side : image.height;
+    const image = state.image;
+    let cols = state.sizeMode === 'ratio' ? state.grid : state.sizeMode === 'custom' ? state.customCols : +state.sizeMode;
+    let rows = state.sizeMode === 'ratio' ? Math.max(1, Math.round(cols * (state.fit === 'cover' ? 1 : image.height / image.width))) : state.sizeMode === 'custom' ? state.customRows : +state.sizeMode;
+    if (state.sizeMode === 'ratio' && rows > 300) { cols = Math.max(1, Math.round(cols * 300 / rows)); rows = 300; }
+    const targetRatio = cols / rows, imageRatio = image.width / image.height;
+    const crop = state.fit === 'cover';
+    let sx = 0, sy = 0, sourceW = image.width, sourceH = image.height;
+    if (crop && imageRatio > targetRatio) { sourceW = image.height * targetRatio; sx = (image.width - sourceW) / 2; }
+    else if (crop && imageRatio < targetRatio) { sourceH = image.width / targetRatio; sy = (image.height - sourceH) / 2; }
     const factor = Math.min(1, 2048 / Math.max(sourceW, sourceH));
     const source = document.createElement('canvas');
     source.width = Math.max(cols, Math.round(sourceW * factor)); source.height = Math.max(rows, Math.round(sourceH * factor));
     const context = source.getContext('2d', {willReadFrequently: true});
-    context.drawImage(image, square ? (image.width - side) / 2 : 0, square ? (image.height - side) / 2 : 0,
+    context.drawImage(image, sx, sy,
       sourceW, sourceH, 0, 0, source.width, source.height);
     const samples = core.sample(context.getImageData(0, 0, source.width, source.height).data, source.width, source.height, cols, rows, state.mode);
     let cells = core.quantize(samples, cols, colors, state.limit, state.dither, state.merge);

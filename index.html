@@ -30,9 +30,11 @@
 
         <div class="divider"></div>
         <div class="card-heading compact"><span class="step">02</span><div><h2>设置图纸</h2><p>先从小尺寸试试看</p></div></div>
-        <label class="field-label" for="widthRange"><span>横向格数</span><span class="value"><b id="widthValue">48</b><small>格</small></span></label>
+        <div class="setting-line size-select-line"><label for="gridSizeSelect">图纸尺寸</label><select id="gridSizeSelect"><option value="ratio" selected>按比例（横向 48 格）</option><option value="52">52 × 52</option><option value="78">78 × 78</option><option value="104">104 × 104</option><option value="custom">自定义</option></select></div>
+        <div id="customSizeFields" class="custom-size-fields hidden"><label>宽 <input id="customCols" type="number" min="1" max="300" value="48" inputmode="numeric"></label><span>×</span><label>高 <input id="customRows" type="number" min="1" max="300" value="48" inputmode="numeric"></label><small>1–300 格</small></div>
+        <label id="ratioWidthLabel" class="field-label" for="widthRange"><span>横向格数</span><span class="value"><b id="widthValue">48</b><small>格</small></span></label>
         <input id="widthRange" type="range" min="10" max="300" value="48" />
-        <div class="range-ends"><span>10</span><span>300</span></div>
+        <div id="ratioWidthEnds" class="range-ends"><span>10</span><span>300</span></div>
         <div class="setting-line"><span>图纸方向</span><div class="segmented" id="orientation"><button class="active" data-fit="contain">完整显示</button><button data-fit="cover">填满画布</button></div></div>
         <div class="setting-line"><span>颜色数量</span><select id="colorLimit" aria-label="颜色数量"><option value="0">完整色板</option><option value="48">48 色</option><option value="32">32 色</option><option value="24">24 色</option><option value="18" selected>18 色</option><option value="12">12 色</option></select></div>
         <div class="setting-line"><label for="modeSelect">取色方式</label><select id="modeSelect"><option value="dominant" selected>主色（卡通）</option><option value="average">平均色（照片）</option></select></div>
